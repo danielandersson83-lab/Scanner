@@ -1,1 +1,790 @@
-<html><body><h1>Filen är skapad</h1><p>Jag lägger in hela appkoden när du bekräftar att nedladdningen fungerar.</p></body></html>
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Device scanner</title>
+    <!-- Leaflet CSS för karta -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-sA+e2atLYYVEkHFl7Lx3CwQ74z8p2O8N9+1iX6lQLvY="
+      crossorigin=""
+    />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            color: #222;
+        }
+        header {
+            background: #b30000;
+            color: #fff;
+            padding: 12px 16px;
+            text-align: center;
+            font-weight: 600;
+        }
+        main {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        video {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+        }
+        .btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        button {
+            flex: 1 1 auto;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        button.primary {
+            background: #b30000;
+            color: #fff;
+        }
+        button.secondary {
+            background: #eee;
+            color: #222;
+        }
+        button.danger {
+            background: #666;
+            color: #fff;
+        }
+        .label-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .label {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #555;
+        }
+        .tiny-btn {
+            flex: 0 0 auto;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 999px;
+            background: #eee;
+        }
+        .tiny-btn.danger {
+            background: #b30000;
+            color: #fff;
+        }
+        .value-box {
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            padding: 8px;
+            min-height: 40px;
+            background: #fafafa;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        ul {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+        }
+        li {
+            font-size: 14px;
+            padding: 4px 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .item-text {
+            flex: 1 1 auto;
+            word-break: break-all;
+        }
+        .item-delete {
+            flex: 0 0 auto;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-radius: 999px;
+            border: none;
+            background: #b30000;
+            color: #fff;
+            cursor: pointer;
+        }
+        .status {
+            font-size: 12px;
+            color: #555;
+            margin-top: 6px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 80px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            padding: 8px;
+            font-size: 13px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            box-sizing: border-box;
+            background: #fafafa;
+        }
+        .warning {
+            font-size: 12px;
+            color: #b30000;
+            margin-top: 4px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #eee;
+            font-size: 12px;
+        }
+        .pill-strong {
+            background: #b30000;
+            color: #fff;
+        }
+        #map {
+            width: 100%;
+            height: 260px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<header>Device scanner</header>
+
+<main>
+    <!-- Kamera/scan -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">Aktivt rum</span>
+            <span id="currentRoomInfo" class="pill pill-strong">Rum 1 • 0 koder</span>
+        </div>
+        <div class="label">Kamera</div>
+        <video id="camera" playsinline autoplay></video>
+        <div id="barcodeSupportWarning" class="warning" style="display:none;">
+            Din webbläsare saknar inbyggt stöd för inbyggd QR-läsare. Försöker använda fallback om möjligt.
+        </div>
+        <div class="btn-row">
+            <button id="btn-room" class="primary">Skanna rumsskylt (text)</button>
+            <button id="btn-qr" class="secondary">Skanna QR-kod</button>
+            <button id="btn-new-room" class="secondary">Spara rum & nytt rum</button>
+        </div>
+        <div id="status" class="status"></div>
+    </section>
+
+    <!-- Rumstext (editbar) -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">Rumsinformation (tolkad / manuell)</span>
+            <button id="btn-clear-room-text" class="tiny-btn danger">Rensa text</button>
+        </div>
+        <textarea id="roomText" placeholder="Ingen skylt skannad ännu. Du kan också skriva in texten manuellt."></textarea>
+    </section>
+
+    <!-- QR i aktuellt rum -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">QR-koder i aktuellt rum</span>
+            <button id="btn-clear-items" class="tiny-btn danger">Rensa koder</button>
+        </div>
+        <ul id="itemsList"></ul>
+    </section>
+
+    <!-- Översikt över alla rum -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">Alla rum & koder (översikt)</span>
+        </div>
+        <div id="allRoomsOverview" class="value-box" style="max-height:180px; overflow:auto;"></div>
+    </section>
+
+    <!-- Karta & fastighetsinfo -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">Position & fastighetsinformation</span>
+            <button id="btn-refresh-location" class="tiny-btn secondary">Uppdatera position</button>
+        </div>
+        <div id="map"></div>
+        <div class="value-box" style="margin-top:8px;">
+            <div><strong>Koordinater:</strong> <span id="coordDisplay">-</span></div>
+            <div><strong>Adress:</strong> <span id="addressDisplay">-</span></div>
+            <div><strong>Fastighetsbeteckning:</strong> <span id="propertyDisplay">-</span></div>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+            <button id="btn-confirm-address" class="primary">Bekräfta att adressen stämmer</button>
+        </div>
+    </section>
+
+    <!-- Sammanställning -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">Sammanställning (läsbar text)</span>
+        </div>
+        <textarea id="resultText" placeholder="Tryck på &quot;Klar / skapa sammanställning&quot; för att generera text."></textarea>
+        <div class="btn-row" style="margin-top:8px;">
+            <button id="btn-generate" class="secondary">Klar / skapa sammanställning</button>
+            <button id="btn-download-csv" class="secondary">Exportera CSV</button>
+            <button id="btn-email" class="primary">Dela / e-posta CSV</button>
+        </div>
+    </section>
+
+    <!-- Session -->
+    <section class="card">
+        <div class="label-row">
+            <span class="label">Session</span>
+        </div>
+        <div class="btn-row">
+            <button id="btn-new-session" class="secondary">Rensa allt (starta om)</button>
+        </div>
+    </section>
+</main>
+
+<!-- Bibliotek: Tesseract för OCR, jsQR för QR-fallback, Leaflet -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-o9N1j7kG1LkG2L1hFqkI4ZsP3p3p07v7vCjuv6p3rWQ="
+  crossorigin=""
+></script>
+
+<script>
+// ---- Hjälpare för PWA / iOS ----
+function isStandalonePWA() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true;
+}
+
+function isSafariLike() {
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('android');
+}
+
+// ---- State ----
+const state = {
+    rooms: [
+        { id: 1, roomText: "", items: [] }
+    ],
+    currentRoomIndex: 0,
+    location: {
+        lat: null,
+        lon: null,
+        address: null,
+        property: null
+    }
+};
+
+function getCurrentRoom() {
+    return state.rooms[state.currentRoomIndex];
+}
+
+// ---- DOM ----
+const video = document.getElementById("camera");
+const statusEl = document.getElementById("status");
+const roomTextEl = document.getElementById("roomText");
+const itemsListEl = document.getElementById("itemsList");
+const resultTextEl = document.getElementById("resultText");
+const overviewEl = document.getElementById("allRoomsOverview");
+const currentRoomInfoEl = document.getElementById("currentRoomInfo");
+const coordDisplayEl = document.getElementById("coordDisplay");
+const addressDisplayEl = document.getElementById("addressDisplay");
+const propertyDisplayEl = document.getElementById("propertyDisplay");
+
+let barcodeDetector = null;
+let qrMode = "none"; // "native" | "jsqr" | "none"
+
+let map;
+let mapMarker;
+
+// ---- Kamera ----
+async function initCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+            audio: false
+        });
+        video.srcObject = stream;
+        statusEl.textContent = "Kamera igång. Skanna rumsskylt eller QR-kod.";
+    } catch (err) {
+        statusEl.textContent = "Kunde inte starta kamera: " + err.message;
+    }
+}
+
+// ---- QR-stöd ----
+function initQrSupport() {
+    const warningEl = document.getElementById("barcodeSupportWarning");
+    if ("BarcodeDetector" in window) {
+        barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+        qrMode = "native";
+        warningEl.style.display = "none";
+    } else if (window.jsQR) {
+        qrMode = "jsqr";
+        warningEl.textContent = "Inget inbyggt QR-stöd, använder jsQR som fallback.";
+        warningEl.style.display = "block";
+    } else {
+        qrMode = "none";
+        warningEl.textContent = "Ingen QR-läsare tillgänglig i denna miljö.";
+        warningEl.style.display = "block";
+    }
+}
+
+// ---- Rumsskylt (OCR) ----
+async function scanRoomSign() {
+    if (!video.videoWidth || !video.videoHeight) {
+        statusEl.textContent = "Vänta en sekund tills kameran har bild...";
+        return;
+    }
+
+    statusEl.textContent = "Läser text från skylt (svenska)...";
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/png");
+
+    try {
+        const result = await Tesseract.recognize(dataUrl, "swe", { logger: () => {} });
+        const text = (result.data.text || "").trim();
+        if (!text) {
+            statusEl.textContent = "Ingen text hittades. Prova närmare/bättre ljus eller skriv in manuellt.";
+            return;
+        }
+        const room = getCurrentRoom();
+        room.roomText = text;
+        roomTextEl.value = text;
+        statusEl.textContent = "Rums-skylt tolkad (du kan justera texten manuellt).";
+        renderOverview();
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Fel vid texttolkning: " + err.message;
+    }
+}
+
+// ---- QR-scan ----
+async function scanQr() {
+    if (!video.videoWidth || !video.videoHeight) {
+        statusEl.textContent = "Vänta en sekund tills kameran har bild...";
+        return;
+    }
+
+    if (qrMode === "native") {
+        await scanQrNative();
+    } else if (qrMode === "jsqr") {
+        await scanQrJsQr();
+    } else {
+        statusEl.textContent = "Ingen QR-läsare tillgänglig.";
+    }
+}
+
+async function scanQrNative() {
+    statusEl.textContent = "Söker efter QR-kod (native)...";
+    try {
+        const codes = await barcodeDetector.detect(video);
+        if (!codes || codes.length === 0) {
+            statusEl.textContent = "Ingen QR-kod hittad, försök igen.";
+            return;
+        }
+        const qr = codes.find(c => c.format === "qr_code") || codes[0];
+        const value = qr.rawValue || "(okänt värde)";
+        addCodeToCurrentRoom(value);
+        if (navigator.vibrate) navigator.vibrate(80);
+        statusEl.textContent = "QR-kod tillagd: " + value;
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Fel vid QR-läsning (native): " + err.message;
+    }
+}
+
+async function scanQrJsQr() {
+    statusEl.textContent = "Söker efter QR-kod (jsQR)...";
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    try {
+        const qr = jsQR(imageData.data, canvas.width, canvas.height);
+        if (!qr) {
+            statusEl.textContent = "Ingen QR-kod hittad, försök igen.";
+            return;
+        }
+        const value = qr.data || "(okänt värde)";
+        addCodeToCurrentRoom(value);
+        if (navigator.vibrate) navigator.vibrate(80);
+        statusEl.textContent = "QR-kod tillagd: " + value;
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Fel vid QR-läsning (jsQR): " + err.message;
+    }
+}
+
+// ---- Rum & koder ----
+function addCodeToCurrentRoom(code) {
+    const room = getCurrentRoom();
+    room.items.push({ code, time: new Date().toISOString() });
+    renderItems();
+    renderOverview();
+    renderCurrentRoomInfo();
+}
+
+function renderItems() {
+    const room = getCurrentRoom();
+    itemsListEl.innerHTML = "";
+    room.items.forEach((item, index) => {
+        const li = document.createElement("li");
+
+        const textSpan = document.createElement("span");
+        textSpan.className = "item-text";
+        textSpan.textContent = (index + 1) + ". " + item.code;
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "item-delete";
+        delBtn.textContent = "Ta bort";
+        delBtn.addEventListener("click", () => {
+            room.items.splice(index, 1);
+            renderItems();
+            renderOverview();
+            renderCurrentRoomInfo();
+        });
+
+        li.appendChild(textSpan);
+        li.appendChild(delBtn);
+        itemsListEl.appendChild(li);
+    });
+}
+
+function renderCurrentRoomInfo() {
+    const room = getCurrentRoom();
+    const roomNumber = state.currentRoomIndex + 1;
+    currentRoomInfoEl.textContent = "Rum " + roomNumber + " • " + room.items.length + " koder";
+}
+
+function renderOverview() {
+    const lines = [];
+    state.rooms.forEach((room, idx) => {
+        if (!room.roomText && room.items.length === 0) {
+            return;
+        }
+        const roomNumber = idx + 1;
+        const firstLine = (room.roomText || "").split("\n")[0].trim();
+        lines.push("Rum " + roomNumber + (firstLine ? " – " + firstLine : ""));
+        room.items.forEach((item, i) => {
+            lines.push("  " + (i + 1) + ". " + item.code);
+        });
+        lines.push("");
+    });
+    overviewEl.textContent = lines.length ? lines.join("\n") : "Inga rum sparade ännu.";
+}
+
+function createNewRoom() {
+    const current = getCurrentRoom();
+    const hasData = current.roomText || current.items.length > 0;
+    if (!hasData && state.rooms.length === 1) {
+        current.roomText = "";
+        current.items = [];
+    }
+    state.rooms.push({ id: state.rooms.length + 1, roomText: "", items: [] });
+    state.currentRoomIndex = state.rooms.length - 1;
+    roomTextEl.value = "";
+    itemsListEl.innerHTML = "";
+    renderCurrentRoomInfo();
+    renderOverview();
+    statusEl.textContent = "Nytt rum påbörjat. Skanna skylt och QR-koder.";
+}
+
+// När användaren skriver i rumsfältet manuellt, uppdatera state
+roomTextEl.addEventListener("input", () => {
+    const room = getCurrentRoom();
+    room.roomText = roomTextEl.value || "";
+    renderOverview();
+});
+
+// ---- Rensa ----
+function clearRoomText() {
+    const room = getCurrentRoom();
+    room.roomText = "";
+    roomTextEl.value = "";
+    renderOverview();
+    statusEl.textContent = "Rums-text rensad.";
+}
+
+function clearItems() {
+    const room = getCurrentRoom();
+    room.items = [];
+    renderItems();
+    renderOverview();
+    renderCurrentRoomInfo();
+    statusEl.textContent = "QR-koder rensade i aktuellt rum.";
+}
+
+function newSession() {
+    state.rooms = [{ id: 1, roomText: "", items: [] }];
+    state.currentRoomIndex = 0;
+    roomTextEl.value = "";
+    itemsListEl.innerHTML = "";
+    resultTextEl.value = "";
+    overviewEl.textContent = "Inga rum sparade ännu.";
+    renderCurrentRoomInfo();
+    statusEl.textContent = "Allt rensat. Ny session startad.";
+}
+
+// ---- Rapport / CSV ----
+function buildTextReport() {
+    const lines = [];
+    lines.push("Sammanställning genererad: " + new Date().toLocaleString());
+    lines.push("Antal rum: " + state.rooms.length);
+    lines.push("");
+
+    state.rooms.forEach((room, idx) => {
+        if (!room.roomText && room.items.length === 0) return;
+        const roomNumber = idx + 1;
+        lines.push("Rum " + roomNumber + ":");
+        lines.push(room.roomText || "(ingen skylttext)");
+        lines.push("Antal koder: " + room.items.length);
+        room.items.forEach((item, i) => {
+            const localTime = new Date(item.time).toLocaleString();
+            lines.push("  " + (i + 1) + ": " + item.code + " (" + localTime + ")");
+        });
+        lines.push("");
+    });
+
+    return lines.join("\n");
+}
+
+function buildCsv() {
+    const lines = [];
+    lines.push("Rum;Kod;Tid;Lat;Lon;Adress;Fastighetsbeteckning");
+
+    const baseLat = state.location.lat;
+    const baseLon = state.location.lon;
+    const baseAddr = (state.location.address || "").replace(/"/g, '""');
+    const baseProp = (state.location.property || "").replace(/"/g, '""');
+
+    state.rooms.forEach((room, idx) => {
+        if (room.items.length === 0) return;
+        const roomNumber = idx + 1;
+        const baseName = (room.roomText || ("Rum " + roomNumber))
+            .split("\n")[0]
+            .replace(/\s+/g, " ")
+            .trim()
+            .replace(/"/g, '""');
+        const label = baseName || ("Rum " + roomNumber);
+        room.items.forEach(item => {
+            const code = (item.code || "").replace(/"/g, '""');
+            const timeLocal = new Date(item.time).toLocaleString();
+            lines.push(`"${label}";"${code}";"${timeLocal}";"${baseLat ?? ""}";"${baseLon ?? ""}";"${baseAddr}";"${baseProp}"`);
+        });
+    });
+
+    return lines.join("\r\n");
+}
+
+function generateReport() {
+    const report = buildTextReport();
+    resultTextEl.value = report;
+    statusEl.textContent = "Sammanställning (text) genererad.";
+}
+
+// ---- CSV-export anpassad för PWA / iOS ----
+async function downloadCsv() {
+    const csv = buildCsv();
+    const hasData = csv && csv.trim().split("\n").length > 1;
+
+    if (!hasData) {
+        statusEl.textContent = "Inga koder att exportera.";
+        alert("Det finns inga skannade koder att exportera.");
+        return;
+    }
+
+    try {
+        if (isStandalonePWA() && navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(csv);
+            statusEl.textContent = "CSV kopierad till urklipp. Klistra in i valfri app.";
+            alert("CSV är kopierad till urklipp.\n\nÖppna Mail, Anteckningar eller annan app och klistra in (långtryck → Klistra in).");
+        } else if (isSafariLike()) {
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+            statusEl.textContent = "CSV öppnad i ny flik. Använd delningsknappen för att spara/skicka.";
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } else {
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const ts = new Date().toISOString().replace(/[:.]/g, "-");
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "device_scanner_" + ts + ".csv";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+            statusEl.textContent = "CSV-fil nedladdad (eller ligger i nedladdningar).";
+        }
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Kunde inte skapa/exportera CSV: " + err.message;
+        alert("Kunde inte skapa/exportera CSV: " + err.message);
+    }
+}
+
+// ---- Dela / e-posta CSV ----
+async function sendEmail() {
+    const csv = buildCsv();
+    const hasData = csv && csv.trim().split("\n").length > 1;
+
+    if (!hasData) {
+        statusEl.textContent = "Inga koder att skicka.";
+        alert("Det finns inga skannade koder att skicka.");
+        return;
+    }
+
+    const subject = "Device scanner - CSV";
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: subject,
+                text: csv
+            });
+            statusEl.textContent = "CSV delad via systemets delningsmeny.";
+            return;
+        } catch (err) {
+            console.warn("navigator.share misslyckades:", err);
+        }
+    }
+
+    try {
+        const mailtoUrl = "mailto:?subject=" + encodeURIComponent(subject) +
+                          "&body=" + encodeURIComponent(csv);
+        statusEl.textContent = "Försöker öppna e-postklient med CSV i meddelandetexten...";
+        window.location.href = mailtoUrl;
+    } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Kunde inte öppna e-postklient: " + err.message;
+        alert("Kunde inte öppna e-postklient: " + err.message);
+    }
+}
+
+// ---- Geolocation & karta ----
+function initMap() {
+    map = L.map('map').setView([62.0, 15.0], 4); // Sverige ungefär
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+}
+
+function updateMapPosition(lat, lon) {
+    if (!map) return;
+    const pos = [lat, lon];
+    map.setView(pos, 17);
+    if (mapMarker) {
+        mapMarker.setLatLng(pos);
+    } else {
+        mapMarker = L.marker(pos).addTo(map);
+    }
+}
+
+function refreshLocation() {
+    if (!navigator.geolocation) {
+        statusEl.textContent = "Geolocation stöds inte i denna enhet/webbläsare.";
+        alert("Geolocation stöds inte i denna enhet/webbläsare.");
+        return;
+    }
+    statusEl.textContent = "Hämtar GPS-position...";
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            state.location.lat = lat;
+            state.location.lon = lon;
+            coordDisplayEl.textContent = lat.toFixed(6) + ", " + lon.toFixed(6);
+            updateMapPosition(lat, lon);
+            statusEl.textContent = "Position uppdaterad.";
+            // Här kan du kalla din egen backend för att reverse-geokoda adress + fastighetsbeteckning
+            // t.ex. via Lantmäteriet. Frontend stub nedan:
+            addressDisplayEl.textContent = "Adress från Lantmäteriet/egen tjänst (ej kopplad ännu)";
+            propertyDisplayEl.textContent = "Fastighetsbeteckning från Lantmäteriet (ej kopplad ännu)";
+        },
+        (err) => {
+            console.error(err);
+            statusEl.textContent = "Kunde inte hämta position: " + err.message;
+            alert("Kunde inte hämta GPS-position: " + err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+function confirmAddress() {
+    if (state.location.lat == null || state.location.lon == null) {
+        alert("Hämta position först.");
+        return;
+    }
+    alert(
+        "Här ska du egentligen kalla din backend som anropar Lantmäteriets API.\n\n" +
+        "Lat: " + state.location.lat.toFixed(6) + "\n" +
+        "Lon: " + state.location.lon.toFixed(6) + "\n\n" +
+        "Backend svarar med adress + fastighetsbeteckning som skrivs ut i fälten."
+    );
+    // När du har en backend:
+    // 1. Skicka lat/lon till t.ex. /api/fastighet?lat=..&lon=..
+    // 2. Sätt state.location.address och state.location.property baserat på svaret
+    // 3. Uppdatera addressDisplayEl.textContent och propertyDisplayEl.textContent
+}
+
+// ---- Eventkoppling ----
+document.getElementById("btn-room").addEventListener("click", scanRoomSign);
+document.getElementById("btn-qr").addEventListener("click", scanQr);
+document.getElementById("btn-new-room").addEventListener("click", createNewRoom);
+document.getElementById("btn-clear-room-text").addEventListener("click", clearRoomText);
+document.getElementById("btn-clear-items").addEventListener("click", clearItems);
+document.getElementById("btn-new-session").addEventListener("click", newSession);
+document.getElementById("btn-generate").addEventListener("click", generateReport);
+document.getElementById("btn-download-csv").addEventListener("click", downloadCsv);
+document.getElementById("btn-email").addEventListener("click", sendEmail);
+document.getElementById("btn-refresh-location").addEventListener("click", refreshLocation);
+document.getElementById("btn-confirm-address").addEventListener("click", confirmAddress);
+
+// ---- Init ----
+window.addEventListener("load", () => {
+    initCamera();
+    initQrSupport();
+    initMap();
+    renderCurrentRoomInfo();
+    renderOverview();
+});
+</script>
+</body>
+</html>
